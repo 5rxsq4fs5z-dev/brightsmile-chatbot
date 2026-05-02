@@ -1,0 +1,12 @@
+.env
+.venv/
+.venv-1/
+.venv-2/
+.venv-3/
+__pycache__/
+.ipynb_checkpoints/
+temp_image.jpg
+Untitled.ipynb
+create_guide.py
+Procfile
+pyvenv.cfg

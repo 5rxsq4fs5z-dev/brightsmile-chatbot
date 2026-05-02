@@ -1,3 +1,7 @@
+from dotenv import load_dotenv
+import os
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
+
 import numpy as np
 import pickle
 from telegram import Update
@@ -5,13 +9,12 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes, Com
 from collections import deque
 import nltk
 import re
-import os
 from cnn_image import حلل_الصورة
 
 nltk.download('punkt_tab')
 nltk.download('stopwords')
 
-TOKEN = "8653613051:AAGStDXdd_6vL7Q1fKIdIPjy84A6MAbjEFU"
+TOKEN = os.getenv("TOKEN")
 
 with open('model.pkl', 'rb') as f:
     نموذج, مفردات = pickle.load(f)
@@ -135,15 +138,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     معرف = update.message.from_user.id
     ذاكرة_المستخدمين[معرف] = ذاكرة_المحادثة()
     await update.message.reply_text(
-        "مرحبا في عيادة برايت سمايل\n"
+        "مرحبا في عيادة برايت سمايل 🦷\n"
         "كيف أقدر أساعدك اليوم؟\n\n"
         "يمكنك سؤالي عن:\n"
-        "حجز موعد\n"
-        "الأسعار\n"
-        "الأطباء\n"
-        "الدوام\n"
-        "الموقع\n"
-        "أو أرسل صورة أسنانك للتحليل"
+        "📅 حجز موعد\n"
+        " الأسعار\n"
+        " الأطباء\n"
+        "🕐 الدوام\n"
+        "📍 الموقع\n"
+        "🦷 أو أرسل صورة أسنانك للتحليل"
     )
 
 def main():
