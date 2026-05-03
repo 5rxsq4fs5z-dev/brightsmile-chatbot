@@ -1,8 +1,9 @@
 import os
 from dotenv import load_dotenv
-
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+PORT = int(os.getenv("PORT", 8443))
 
 import numpy as np
 import pickle
@@ -150,8 +151,16 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("البوت شغال! NLP + ANN + RNN + CNN")
-    app.run_polling()
+    if WEBHOOK_URL:
+        print("البوت شغال بـ Webhook! NLP + ANN + RNN + CNN")
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            webhook_url=WEBHOOK_URL
+        )
+    else:
+        print("البوت شغال بـ Polling! NLP + ANN + RNN + CNN")
+        app.run_polling()
 
 if __name__ == "__main__":
     main()
