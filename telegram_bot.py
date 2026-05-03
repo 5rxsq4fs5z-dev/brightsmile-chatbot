@@ -1,6 +1,8 @@
-from dotenv import load_dotenv
 import os
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
+from dotenv import load_dotenv
+
+load_dotenv()
+TOKEN = os.getenv("TOKEN")
 
 import numpy as np
 import pickle
@@ -13,8 +15,6 @@ from cnn_image import حلل_الصورة
 
 nltk.download('punkt_tab')
 nltk.download('stopwords')
-
-TOKEN = os.getenv("TOKEN")
 
 with open('model.pkl', 'rb') as f:
     نموذج, مفردات = pickle.load(f)
@@ -100,13 +100,10 @@ def رد_البوت(نية):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     رسالة = update.message.text
     معرف = update.message.from_user.id
-
     if معرف not in ذاكرة_المستخدمين:
         ذاكرة_المستخدمين[معرف] = ذاكرة_المحادثة()
-
     ذاكرة = ذاكرة_المستخدمين[معرف]
     ذاكرة.استخرج_الاسم(رسالة)
-
     if هل_رقم_جوال(رسالة):
         if ذاكرة.آخر_موضوع == "إلغاء موعد":
             نية = "تأكيد_إلغاء"
@@ -114,7 +111,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             نية = "تأكيد_حجز"
     else:
         نية = فهم_النية(رسالة)
-
     رد = رد_البوت(نية)
     رد_مخصص = ذاكرة.خصص_الرد(رد, نية)
     ذاكرة.ذاكرة.append({'رسالة': رسالة, 'نية': نية, 'رد': رد_مخصص})
@@ -142,8 +138,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "كيف أقدر أساعدك اليوم؟\n\n"
         "يمكنك سؤالي عن:\n"
         "📅 حجز موعد\n"
-        " الأسعار\n"
-        " الأطباء\n"
+        "💰 الأسعار\n"
+        "👨‍⚕️ الأطباء\n"
         "🕐 الدوام\n"
         "📍 الموقع\n"
         "🦷 أو أرسل صورة أسنانك للتحليل"
