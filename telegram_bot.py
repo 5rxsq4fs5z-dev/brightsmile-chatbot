@@ -3,11 +3,13 @@ from dotenv import load_dotenv
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+SHEET_URL = os.getenv("SHEET_URL")
 PORT = int(os.getenv("PORT", 8443))
 
 import numpy as np
 import pickle
 import random
+import requests
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes, CommandHandler
 from collections import deque
@@ -119,11 +121,34 @@ with open('model.pkl', 'rb') as f:
     ],
 }
 
+# ========== نظام الحجز ==========
+أيام_الأسبوع = ["السبت", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس"]
+أوقات_متاحة = ["9:00 صباحاً", "10:00 صباحاً", "11:00 صباحاً", "12:00 ظهراً",
+               "1:00 مساءً", "2:00 مساءً", "3:00 مساءً", "4:00 مساءً",
+               "5:00 مساءً", "6:00 مساءً", "7:00 مساءً", "8:00 مساءً"]
+
+def حفظ_حجز(اسم, جوال, يوم, وقت, خدمة="كشف"):
+    try:
+        data = {
+            "اسم": اسم,
+            "جوال": جوال,
+            "يوم": يوم,
+            "وقت": وقت,
+            "خدمة": خدمة
+        }
+        requests.post(SHEET_URL, json=data, timeout=10)
+        return True
+    except:
+        return False
+
 class ذاكرة_المحادثة:
     def __init__(self):
         self.ذاكرة = deque(maxlen=10)
         self.اسم_المريض = None
         self.آخر_موضوع = None
+        self.مرحلة_الحجز = None
+        self.يوم_الحجز = None
+        self.وقت_الحجز = None
 
     def استخرج_الاسم(self, رسالة):
         أنماط = [
@@ -163,6 +188,22 @@ def جملة_لأرقام(جملة, مفردات):
 def هل_رقم_جوال(نص):
     نص_نظيف = re.sub(r'\s+', '', نص)
     return bool(re.match(r'^[0-9+]{9,13}$', نص_نظيف))
+
+def استخرج_اليوم(رسالة):
+    for يوم in أيام_الأسبوع:
+        if يوم in رسالة:
+            return يوم
+    if "بكره" in رسالة or "بكرة" in رسالة:
+        return "غداً"
+    if "اليوم" in رسالة:
+        return "اليوم"
+    return None
+
+def استخرج_الوقت(رسالة):
+    for وقت in أوقات_متاحة:
+        if وقت.split(":")[0] in رسالة:
+            return وقت
+    return None
 
 def فهم_النية(جملة):
     تحيات = ['السلام', 'عليكم', 'وعليكم', 'مرحبا', 'هلا', 'اهلا',
@@ -204,10 +245,65 @@ def رد_البوت(نية, رسالة=""):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     رسالة = update.message.text
     معرف = update.message.from_user.id
+
     if معرف not in ذاكرة_المستخدمين:
         ذاكرة_المستخدمين[معرف] = ذاكرة_المحادثة()
+
     ذاكرة = ذاكرة_المستخدمين[معرف]
     ذاكرة.استخرج_الاسم(رسالة)
+
+    # ========== نظام الحجز الذكي ==========
+    if ذاكرة.مرحلة_الحجز == "انتظار_اليوم":
+        يوم = استخرج_اليوم(رسالة)
+        if يوم:
+            ذاكرة.يوم_الحجز = يوم
+            ذاكرة.مرحلة_الحجز = "انتظار_الوقت"
+            أوقات = "\n".join([f"• {و}" for و in أوقات_متاحة[:6]])
+            await update.message.reply_text(
+                f"المواعيد المتاحة يوم {يوم}:\n{أوقات}\n\nأي وقت يناسبك؟"
+            )
+            return
+        else:
+            await update.message.reply_text("ما فهمت اليوم. اكتب مثلاً: السبت، الأحد، الاثنين...")
+            return
+
+    elif ذاكرة.مرحلة_الحجز == "انتظار_الوقت":
+        وقت = استخرج_الوقت(رسالة)
+        if وقت:
+            ذاكرة.وقت_الحجز = وقت
+            ذاكرة.مرحلة_الحجز = "انتظار_الجوال"
+            await update.message.reply_text(
+                f"ممتاز! موعدك:\nاليوم: {ذاكرة.يوم_الحجز}\nالوقت: {وقت}\n\nأخير، عطني رقم جوالك للتأكيد."
+            )
+            return
+        else:
+            await update.message.reply_text("اكتب الساعة مثلاً: 9 أو 10 أو 11...")
+            return
+
+    elif ذاكرة.مرحلة_الحجز == "انتظار_الجوال":
+        if هل_رقم_جوال(رسالة):
+            اسم = ذاكرة.اسم_المريض or "مريض"
+            نجح = حفظ_حجز(اسم, رسالة, ذاكرة.يوم_الحجز, ذاكرة.وقت_الحجز)
+            ذاكرة.مرحلة_الحجز = None
+            if نجح:
+                await update.message.reply_text(
+                    f"تم الحجز بنجاح!\n"
+                    f"الاسم: {اسم}\n"
+                    f"اليوم: {ذاكرة.يوم_الحجز}\n"
+                    f"الوقت: {ذاكرة.وقت_الحجز}\n"
+                    f"الجوال: {رسالة}\n\n"
+                    f"سنتواصل معك لتأكيد الموعد. نتمنى لك يوماً سعيداً!"
+                )
+            else:
+                await update.message.reply_text(
+                    f"تم تسجيل موعدك!\nاليوم: {ذاكرة.يوم_الحجز}\nالوقت: {ذاكرة.وقت_الحجز}\nسنتصل عليك قريباً."
+                )
+            return
+        else:
+            await update.message.reply_text("الرقم ما صح. أعد إدخال رقم الجوال.")
+            return
+
+    # ========== المنطق الأساسي ==========
     if هل_رقم_جوال(رسالة):
         if ذاكرة.آخر_موضوع == "إلغاء موعد":
             نية = "تأكيد_إلغاء"
@@ -215,6 +311,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             نية = "تأكيد_حجز"
     else:
         نية = فهم_النية(رسالة)
+
+    if نية == "حجز موعد":
+        ذاكرة.مرحلة_الحجز = "انتظار_اليوم"
+
     رد = رد_البوت(نية, رسالة)
     رد_مخصص = ذاكرة.خصص_الرد(رد, نية)
     ذاكرة.ذاكرة.append({'رسالة': رسالة, 'نية': نية, 'رد': رد_مخصص})
