@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم برايت سمايل</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; color: #333; }
+        header { background: #1a73e8; color: white; padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; }
+        header h1 { font-size: 22px; }
+        header span { font-size: 14px; opacity: 0.8; }
+        .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; padding: 20px 30px; }
+        .stat-card { background: white; border-radius: 10px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+        .stat-card h3 { font-size: 32px; font-weight: bold; margin-bottom: 8px; }
+        .stat-card p { color: #666; font-size: 14px; }
+        .total { color: #1a73e8; }
+        .confirmed { color: #34a853; }
+        .cancelled { color: #ea4335; }
+        .today { color: #fbbc04; }
+        .table-section { padding: 0 30px 30px; }
+        .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .table-header h2 { font-size: 18px; }
+        .filters { display: flex; gap: 10px; }
+        .filters button { padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 6px; cursor: pointer; font-size: 13px; }
+        .filters button.active { background: #1a73e8; color: white; border-color: #1a73e8; }
+        .refresh-btn { padding: 8px 20px; background: #34a853; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
+        table { width: 100%; background: white; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-collapse: collapse; overflow: hidden; }
+        th { background: #f8f9fa; padding: 14px 16px; text-align: right; font-size: 13px; color: #666; border-bottom: 2px solid #eee; }
+        td { padding: 14px 16px; font-size: 14px; border-bottom: 1px solid #f0f0f0; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #f8f9fa; }
+        .badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+        .badge-confirmed { background: #e8f5e9; color: #34a853; }
+        .badge-cancelled { background: #fce8e6; color: #ea4335; }
+        .loading { text-align: center; padding: 40px; color: #666; }
+        .empty { text-align: center; padding: 40px; color: #999; }
+        @media (max-width: 768px) {
+            .stats { grid-template-columns: repeat(2, 1fr); }
+            .filters { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>لوحة تحكم عيادة برايت سمايل</h1>
+    <span id="last-update">جاري التحميل...</span>
+</header>
+
+<div class="stats">
+    <div class="stat-card">
+        <h3 class="total" id="total">0</h3>
+        <p>إجمالي الحجوزات</p>
+    </div>
+    <div class="stat-card">
+        <h3 class="confirmed" id="confirmed">0</h3>
+        <p>مؤكدة</p>
+    </div>
+    <div class="stat-card">
+        <h3 class="cancelled" id="cancelled">0</h3>
+        <p>ملغية</p>
+    </div>
+    <div class="stat-card">
+        <h3 class="today" id="today-count">0</h3>
+        <p>حجوزات اليوم</p>
+    </div>
+</div>
+
+<div class="table-section">
+    <div class="table-header">
+        <h2>قائمة الحجوزات</h2>
+        <div style="display:flex; gap:10px; align-items:center;">
+            <div class="filters">
+                <button class="active" onclick="filterTable('all', this)">الكل</button>
+                <button onclick="filterTable('مؤكد', this)">مؤكدة</button>
+                <button onclick="filterTable('ملغي', this)">ملغية</button>
+            </div>
+            <button class="refresh-btn" onclick="loadData()">تحديث</button>
+        </div>
+    </div>
+
+    <table id="appointments-table">
+        <thead>
+            <tr>
+                <th>رقم</th>
+                <th>الاسم</th>
+                <th>الجوال</th>
+                <th>اليوم</th>
+                <th>الوقت</th>
+                <th>الخدمة</th>
+                <th>الحالة</th>
+            </tr>
+        </thead>
+        <tbody id="table-body">
+            <tr><td colspan="7" class="loading">جاري تحميل البيانات...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+const SHEET_ID = '1mmOE2SR03S_PnMQmApKou_2PbJxhuBIeSTQxlxqGL7k';
+const API_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
+
+let allData = [];
+let currentFilter = 'all';
+
+async function loadData() {
+    try {
+        document.getElementById('table-body').innerHTML = '<tr><td colspan="7" class="loading">جاري التحميل...</td></tr>';
+        
+        const response = await fetch(API_URL);
+        const text = await response.text();
+        const json = JSON.parse(text.substring(47, text.length - 2));
+        
+        allData = [];
+        const rows = json.table.rows;
+        
+        rows.forEach(row => {
+            if (row.c && row.c[1] && row.c[1].v) {
+                allData.push({
+                    num: row.c[0] ? row.c[0].v : '',
+                    name: row.c[1] ? row.c[1].v : '',
+                    phone: row.c[2] ? row.c[2].v : '',
+                    day: row.c[3] ? row.c[3].v : '',
+                    time: row.c[4] ? row.c[4].v : '',
+                    service: row.c[5] ? row.c[5].v : '',
+                    status: row.c[6] ? row.c[6].v : 'مؤكد'
+                });
+            }
+        });
+
+        updateStats();
+        renderTable(currentFilter);
+        
+        const now = new Date();
+        document.getElementById('last-update').textContent = 
+            `آخر تحديث: ${now.toLocaleTimeString('ar-SA')}`;
+
+    } catch (error) {
+        document.getElementById('table-body').innerHTML = 
+            '<tr><td colspan="7" class="empty">تعذر تحميل البيانات. تأكدي من إعدادات المشاركة.</td></tr>';
+    }
+}
+
+function updateStats() {
+    const total = allData.length;
+    const confirmed = allData.filter(r => !r.status.includes('ملغي')).length;
+    const cancelled = allData.filter(r => r.status.includes('ملغي')).length;
+    
+    const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+    const todayName = days[new Date().getDay()];
+    const todayCount = allData.filter(r => r.day === todayName).length;
+
+    document.getElementById('total').textContent = total;
+    document.getElementById('confirmed').textContent = confirmed;
+    document.getElementById('cancelled').textContent = cancelled;
+    document.getElementById('today-count').textContent = todayCount;
+}
+
+function renderTable(filter) {
+    const tbody = document.getElementById('table-body');
+    let filtered = filter === 'all' ? allData : 
+                   allData.filter(r => r.status.includes(filter));
+    
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">لا توجد حجوزات</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(r => `
+        <tr>
+            <td>${r.num}</td>
+            <td>${r.name}</td>
+            <td>${r.phone}</td>
+            <td>${r.day}</td>
+            <td>${r.time}</td>
+            <td>${r.service}</td>
+            <td><span class="badge ${r.status.includes('ملغي') ? 'badge-cancelled' : 'badge-confirmed'}">${r.status}</span></td>
+        </tr>
+    `).join('');
+}
+
+function filterTable(filter, btn) {
+    currentFilter = filter;
+    document.querySelectorAll('.filters button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTable(filter);
+}
+
+loadData();
+setInterval(loadData, 60000);
+</script>
+
+</body>
+</html>
