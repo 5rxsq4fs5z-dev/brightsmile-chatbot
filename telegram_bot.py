@@ -252,13 +252,20 @@ def رد_البوت(نية, رسالة=""):
         elif any(k in رسالة_lower for k in ["باي", "مع السلامة", "وداع"]):
             return random.choice(ردود_متنوعة["ترحيب"]["باي"])
         else:
-            return random.choice(ردود_متنوعة["ترحيب"]["default"])
+            
+          return random.choice(ردود_متنوعة["ترحيب"]["default"])
+        "شكر": [
+        "العفو! يسعدنا خدمتك دائماً.",
+        "لا شكر على واجب! في شيء ثاني أقدر أساعدك فيه؟",
+        "هذا واجبنا! لو احتجت أي شيء أنا هنا.",
+        "مع السلامة! نتمنى نشوفك قريب.",
+     
     elif نية in ردود_متنوعة:
         ردود = ردود_متنوعة[نية]
         if isinstance(ردود, list):
             return random.choice(ردود)
         return ردود
-    return random.choice(ردود_متنوعة["غير معروف"])
+    return random.choice(ردود_متنوعة["غير معروف"]),
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     رسالة = update.message.text
