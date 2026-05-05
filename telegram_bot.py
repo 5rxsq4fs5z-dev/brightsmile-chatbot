@@ -141,7 +141,10 @@ def حفظ_حجز(اسم, جوال, يوم, وقت, خدمة="كشف"):
 def إلغاء_حجز(جوال):
     try:
         data = {"إلغاء": True, "جوال": جوال}
-        requests.post(SHEET_URL, json=data, timeout=10)
+        response = requests.post(SHEET_URL, json=data, timeout=10)
+        result = response.json()
+        if result.get("status") == "not_found":
+            return False
         return True
     except:
         return False
@@ -357,12 +360,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif ذاكرة.مرحلة_الحجز == "انتظار_جوال_إلغاء_نهائي":
         if هل_رقم_جوال(رسالة):
-            إلغاء_حجز(رسالة)
+            نجح = إلغاء_حجز(رسالة)
             ذاكرة.مرحلة_الحجز = None
-            await update.message.reply_text(
-                "تم إلغاء موعدك. يسعدنا نشوفك في وقت ثاني!",
-                reply_markup=القائمة_الرئيسية
-            )
+            if نجح:
+                await update.message.reply_text(
+                    "تم إلغاء موعدك. يسعدنا نشوفك في وقت ثاني!",
+                    reply_markup=القائمة_الرئيسية
+                )
+            else:
+                await update.message.reply_text(
+                    "الرقم غير مسجل عندنا. تأكد من الرقم وحاول مرة ثانية.",
+                    reply_markup=القائمة_الرئيسية
+                )
             return
         else:
             await update.message.reply_text("الرقم ما صح. أعد المحاولة.")
@@ -370,13 +379,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif ذاكرة.مرحلة_الحجز == "انتظار_جوال_تغيير":
         if هل_رقم_جوال(رسالة):
-            إلغاء_حجز(رسالة)
-            ذاكرة.مرحلة_الحجز = "انتظار_اليوم"
-            لوحة = ReplyKeyboardMarkup(
-                [أيام_الأسبوع[:3], أيام_الأسبوع[3:]],
-                resize_keyboard=True, one_time_keyboard=True
-            )
-            await update.message.reply_text("تم إلغاء موعدك القديم. وش اليوم الجديد؟", reply_markup=لوحة)
+            نجح = إلغاء_حجز(رسالة)
+            if نجح:
+                ذاكرة.مرحلة_الحجز = "انتظار_اليوم"
+                لوحة = ReplyKeyboardMarkup(
+                    [أيام_الأسبوع[:3], أيام_الأسبوع[3:]],
+                    resize_keyboard=True, one_time_keyboard=True
+                )
+                await update.message.reply_text("تم إلغاء موعدك القديم. وش اليوم الجديد؟", reply_markup=لوحة)
+            else:
+                ذاكرة.مرحلة_الحجز = None
+                await update.message.reply_text(
+                    "الرقم غير مسجل عندنا. تأكد من الرقم وحاول مرة ثانية.",
+                    reply_markup=القائمة_الرئيسية
+                )
             return
         else:
             await update.message.reply_text("الرقم ما صح. أعد المحاولة.")
