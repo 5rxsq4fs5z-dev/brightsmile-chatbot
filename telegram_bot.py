@@ -525,7 +525,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(نتيجة)
 
+ADMIN_ID =  220480516 # ← غيري هذا الرقم بمعرفك
+
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.from_user.id != ADMIN_ID:
+        await update.message.reply_text("عذراً، هذا الأمر للإدارة فقط.")
+        return
     await update.message.reply_text(عرض_الإحصاءات(), reply_markup=القائمة_الرئيسية)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
