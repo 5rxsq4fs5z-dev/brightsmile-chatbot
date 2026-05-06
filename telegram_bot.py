@@ -26,6 +26,7 @@ with open('model.pkl', 'rb') as f:
 
 ذاكرة_المستخدمين = {}
 مرضى_جدد = set()
+إحصاءات = {"حجوزات": 0, "إلغاءات": 0, "خدمات": {}, "أيام": {}}
 
 ردود_متنوعة = {
     "ترحيب": {
@@ -115,6 +116,14 @@ with open('model.pkl', 'rb') as f:
         "نصيحة اليوم: زور طبيب الأسنان كل 6 أشهر للفحص الدوري.",
         "نصيحة اليوم: استخدم معجون أسنان بالفلورايد لتقوية المينا.",
         "نصيحة اليوم: اشرب الماء بكثرة لتنظيف فمك طبيعياً.",
+        "نصيحة اليوم: تجنب العض على الأشياء الصلبة لحماية أسنانك.",
+        "نصيحة اليوم: التدخين يضر بصحة الأسنان واللثة بشكل كبير.",
+        "نصيحة اليوم: الكالسيوم مهم لتقوية الأسنان — اشرب الحليب يومياً.",
+    ],
+    "تقييم": [
+        "شكراً على تقييمك! رأيك يهمنا كثيراً.",
+        "نقدر ملاحظتك! سنعمل على تحسين خدماتنا.",
+        "شكراً جزيلاً! تقييمك يساعدنا نخدمك أفضل.",
     ],
     "غير معروف": [
         "ما فهمت طلبك. اختر من القائمة:",
@@ -135,15 +144,21 @@ with open('model.pkl', 'rb') as f:
         ["الاسعار", "التامين"],
         ["الاطباء", "الدوام"],
         ["الموقع", "التواصل"],
-        ["العروض", "نصيحة اليوم"]
+        ["العروض", "نصيحة اليوم"],
+        ["تقييم العيادة"]
     ],
     resize_keyboard=True
 )
 
+لوحة_التقييم = ReplyKeyboardMarkup(
+    [["⭐⭐⭐⭐⭐ ممتاز", "⭐⭐⭐⭐ جيد جداً"],
+     ["⭐⭐⭐ جيد", "⭐⭐ مقبول"]],
+    resize_keyboard=True, one_time_keyboard=True
+)
+
 def حفظ_حجز(اسم, جوال, يوم, وقت, خدمة="كشف", معرف_تليغرام=""):
     try:
-        غداً = datetime.now() + timedelta(days=1)
-        تاريخ = غداً.strftime("%Y-%m-%d")
+        تاريخ = datetime.now().strftime("%Y-%m-%d")
         data = {
             "اسم": اسم,
             "جوال": جوال,
@@ -154,6 +169,9 @@ def حفظ_حجز(اسم, جوال, يوم, وقت, خدمة="كشف", معرف_
             "معرف_تليغرام": str(معرف_تليغرام)
         }
         requests.post(SHEET_URL, json=data, timeout=10)
+        إحصاءات["حجوزات"] += 1
+        إحصاءات["خدمات"][خدمة] = إحصاءات["خدمات"].get(خدمة, 0) + 1
+        إحصاءات["أيام"][يوم] = إحصاءات["أيام"].get(يوم, 0) + 1
         return True
     except:
         return False
@@ -165,9 +183,21 @@ def إلغاء_حجز(جوال):
         result = response.json()
         if result.get("status") == "not_found":
             return False
+        إحصاءات["إلغاءات"] += 1
         return True
     except:
         return False
+
+def عرض_الإحصاءات():
+    أكثر_خدمة = max(إحصاءات["خدمات"], key=إحصاءات["خدمات"].get) if إحصاءات["خدمات"] else "لا يوجد"
+    أكثر_يوم = max(إحصاءات["أيام"], key=إحصاءات["أيام"].get) if إحصاءات["أيام"] else "لا يوجد"
+    return (
+        f"إحصاءات العيادة:\n"
+        f"إجمالي الحجوزات: {إحصاءات['حجوزات']}\n"
+        f"الإلغاءات: {إحصاءات['إلغاءات']}\n"
+        f"أكثر خدمة مطلوبة: {أكثر_خدمة}\n"
+        f"أكثر يوم حجزاً: {أكثر_يوم}"
+    )
 
 class ذاكرة_المحادثة:
     def __init__(self):
@@ -179,6 +209,7 @@ class ذاكرة_المحادثة:
         self.وقت_الحجز = None
         self.خدمة_الحجز = "كشف"
         self.جوال_المريض = None
+        self.ينتظر_تقييم = False
 
     def استخرج_الاسم(self, رسالة):
         أنماط = [
@@ -245,6 +276,7 @@ def فهم_النية(جملة):
         "التواصل": "سؤال عن التواصل",
         "العروض": "سؤال عن العروض",
         "نصيحة اليوم": "نصيحة",
+        "تقييم العيادة": "تقييم",
     }
     if جملة in خريطة_الأزرار:
         return خريطة_الأزرار[جملة]
@@ -258,7 +290,6 @@ def فهم_النية(جملة):
 
     if any(ك in شكر_كلمات for ك in كلمات_جملة):
         return "شكر"
-
     if any(ك in تحيات for ك in كلمات_جملة):
         return "ترحيب"
 
@@ -300,6 +331,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     ذاكرة = ذاكرة_المستخدمين[معرف]
     ذاكرة.استخرج_الاسم(رسالة)
+
+    # ========== التقييم ==========
+    if ذاكرة.ينتظر_تقييم:
+        ذاكرة.ينتظر_تقييم = False
+        await update.message.reply_text(
+            random.choice(ردود_متنوعة["تقييم"]),
+            reply_markup=القائمة_الرئيسية
+        )
+        return
 
     if ذاكرة.مرحلة_الحجز == "انتظار_الاسم":
         ذاكرة.اسم_المريض = رسالة.strip()
@@ -449,6 +489,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(رد_إلغاء, reply_markup=لوحة)
         return
 
+    elif نية == "تقييم":
+        ذاكرة.ينتظر_تقييم = True
+        await update.message.reply_text(
+            "يسعدنا نعرف رأيك في خدماتنا! كيف تقيم تجربتك معنا؟",
+            reply_markup=لوحة_التقييم
+        )
+        return
+
     رد = رد_البوت(نية, رسالة)
     رد_مخصص = ذاكرة.خصص_الرد(رد, نية)
 
@@ -477,6 +525,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(نتيجة)
 
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(عرض_الإحصاءات(), reply_markup=القائمة_الرئيسية)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     معرف = update.message.from_user.id
     ذاكرة_المستخدمين[معرف] = ذاكرة_المحادثة()
@@ -490,6 +541,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("stats", stats))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     if WEBHOOK_URL:
