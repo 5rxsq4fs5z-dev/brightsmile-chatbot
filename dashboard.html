@@ -105,11 +105,12 @@
                 <th>اليوم</th>
                 <th>الوقت</th>
                 <th>الخدمة</th>
+                <th>التاريخ</th>
                 <th>الحالة</th>
             </tr>
         </thead>
         <tbody id="table-body">
-            <tr><td colspan="7" class="loading">جاري تحميل البيانات...</td></tr>
+            <tr><td colspan="8" class="loading">جاري تحميل البيانات...</td></tr>
         </tbody>
     </table>
 </div>
@@ -125,7 +126,7 @@ let daysChart = null;
 
 async function loadData() {
     try {
-        document.getElementById('table-body').innerHTML = '<tr><td colspan="7" class="loading">جاري التحميل...</td></tr>';
+        document.getElementById('table-body').innerHTML = '<tr><td colspan="8" class="loading">جاري التحميل...</td></tr>';
         
         const response = await fetch(API_URL);
         const text = await response.text();
@@ -143,7 +144,8 @@ async function loadData() {
                     day: row.c[3] ? row.c[3].v : '',
                     time: row.c[4] ? row.c[4].v : '',
                     service: row.c[5] ? row.c[5].v : '',
-                    status: row.c[6] ? row.c[6].v : 'مؤكد'
+                    status: row.c[6] ? row.c[6].v : 'مؤكد',
+                    date: row.c[7] ? row.c[7].v : ''
                 });
             }
         });
@@ -158,7 +160,7 @@ async function loadData() {
 
     } catch (error) {
         document.getElementById('table-body').innerHTML = 
-            '<tr><td colspan="7" class="empty">تعذر تحميل البيانات.</td></tr>';
+            '<tr><td colspan="8" class="empty">تعذر تحميل البيانات.</td></tr>';
     }
 }
 
@@ -178,19 +180,16 @@ function updateStats() {
 }
 
 function updateCharts() {
-    // إحصاءات الخدمات
     const servicesCount = {};
     allData.forEach(r => {
         if (r.service) servicesCount[r.service] = (servicesCount[r.service] || 0) + 1;
     });
 
-    // إحصاءات الأيام
     const daysCount = {};
     allData.forEach(r => {
         if (r.day) daysCount[r.day] = (daysCount[r.day] || 0) + 1;
     });
 
-    // رسم خدمات
     if (servicesChart) servicesChart.destroy();
     const ctxS = document.getElementById('servicesChart').getContext('2d');
     servicesChart = new Chart(ctxS, {
@@ -208,7 +207,6 @@ function updateCharts() {
         }
     });
 
-    // رسم أيام
     if (daysChart) daysChart.destroy();
     const ctxD = document.getElementById('daysChart').getContext('2d');
     daysChart = new Chart(ctxD, {
@@ -235,7 +233,7 @@ function renderTable(filter) {
     let filtered = filter === 'all' ? allData : allData.filter(r => r.status.includes(filter));
     
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty">لا توجد حجوزات</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="empty">لا توجد حجوزات</td></tr>';
         return;
     }
 
@@ -247,6 +245,7 @@ function renderTable(filter) {
             <td>${r.day}</td>
             <td>${r.time}</td>
             <td>${r.service}</td>
+            <td>${r.date}</td>
             <td><span class="badge ${r.status.includes('ملغي') ? 'badge-cancelled' : 'badge-confirmed'}">${r.status}</span></td>
         </tr>
     `).join('');
